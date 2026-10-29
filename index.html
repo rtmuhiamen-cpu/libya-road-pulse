@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071522">
+  <title>LIBYA ROAD PULSE | نبض الطريق ليبيا</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --bg:#071522; --panel:#102334; --line:#254155;
+      --text:#f2f7fb; --muted:#a8bdcd; --green:#38d9a9;
+      --blue:#54b8ff; --red:#ff7777;
+    }
+    * { box-sizing:border-box }
+    body {
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    }
+    header {
+      padding:22px 16px; text-align:center;
+      background:linear-gradient(145deg,#102f43,#071522);
+      border-bottom:1px solid var(--line);
+    }
+    .logo { font-size:28px; font-weight:900; letter-spacing:.5px }
+    .logo span { color:var(--green) }
+    header p { color:var(--muted); margin:8px 0 0 }
+    main { max-width:950px; margin:auto; padding:16px }
+    .notice {
+      padding:12px; border:1px solid #755c2e; background:#292416;
+      border-radius:12px; color:#ffe5a4; line-height:1.7; font-size:14px;
+    }
+    .stats {
+      display:grid; grid-template-columns:repeat(3,1fr);
+      gap:9px; margin:14px 0;
+    }
+    .stat,.panel {
+      background:var(--panel); border:1px solid var(--line);
+      border-radius:15px; padding:14px;
+    }
+    .stat strong { display:block; font-size:24px; color:var(--green) }
+    .stat span { font-size:12px; color:var(--muted) }
+    h2 { font-size:18px; margin:0 0 14px }
+    #map {
+      height:330px; border-radius:13px; overflow:hidden;
+      border:1px solid var(--line); margin-bottom:16px;
+    }
+    label { display:block; font-size:14px; margin:12px 0 6px }
+    input,select,textarea {
+      width:100%; padding:12px; border-radius:10px;
+      border:1px solid #345267; background:#081a28;
+      color:var(--text); font-size:16px;
+    }
+    textarea { min-height:85px; resize:vertical }
+    button {
+      border:0; border-radius:10px; padding:12px 14px;
+      font-size:15px; font-weight:750; cursor:pointer;
+    }
+    .primary { background:var(--green); color:#062019; width:100%; margin-top:14px }
+    .secondary { background:#193a50; color:white; margin-top:8px }
+    .row { display:flex; gap:8px; flex-wrap:wrap }
+    .row button { flex:1 }
+    .muted { color:var(--muted); font-size:13px; line-height:1.7 }
+    .reports { display:grid; gap:10px; margin-top:12px }
+    .report {
+      padding:13px; background:#0a1b29;
+      border:1px solid var(--line); border-radius:12px;
+    }
+    .report strong { display:block; margin-bottom:6px }
+    .tag { display:inline-block; color:var(--green); font-size:12px; margin-bottom:7px }
+    .report p { margin:5px 0; line-height:1.6; overflow-wrap:anywhere }
+    .danger { color:#ffaaaa; background:#3b2028 }
+    footer { text-align:center; padding:25px 10px; color:var(--muted); font-size:12px }
+    @media(min-width:700px) {
+      .layout { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">LIBYA <span>ROAD PULSE</span></div>
+  <p>نبض الطريق ليبيا — معلومات وبلاغات الطرق</p>
+</header>
+
+<main>
+  <div class="notice">
+    ⚠️ نسخة تجريبية: البلاغات يضيفها المستخدمون على أجهزتهم فقط.
+    الخريطة لا تعرض حاليًا حركة المرور الحية أو إغلاقات مؤكدة رسميًا.
+    لا تعتمد عليها وحدها في قرارات السلامة.
+  </div>
+
+  <div class="stats">
+    <div class="stat"><strong id="total">0</strong><span>البلاغات المحفوظة</span></div>
+    <div class="stat"><strong id="closures">0</strong><span>بلاغات الإغلاق</span></div>
+    <div class="stat"><strong id="hazards">0</strong><span>المخاطر والمياه</span></div>
+  </div>
+
+  <section class="panel" style="margin-bottom:16px">
+    <h2>🗺️ خريطة الطرق</h2>
+    <div id="map"></div>
+    <p class="muted">اضغط على الخريطة لتحديد موقع البلاغ، أو استخدم زر تحديد موقعي.</p>
+    <div class="row">
+      <button class="secondary" id="locate">📍 تحديد موقعي</button>
+      <button class="secondary" id="tripoli">طرابلس</button>
+    </div>
+    <p id="coordinates" class="muted">لم يُحدَّد موقع بعد.</p>
+  </section>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>📣 أضف بلاغًا عن الطريق</h2>
+      <form id="reportForm">
+        <label for="type">نوع البلاغ</label>
+        <select id="type" required>
+          <option value="ازدحام">🚗 ازدحام مروري</option>
+          <option value="حادث">🚧 حادث مروري</option>
+          <option value="إغلاق">⛔ إغلاق طريق</option>
+          <option value="مياه">🌧️ تجمع مياه</option>
+          <option value="خطر">⚠️ خطر على الطريق</option>
+          <option value="أعمال">🛠️ أعمال صيانة</option>
+        </select>
+
+        <label for="area">اسم الشارع أو المنطقة</label>
+        <input id="area" maxlength="100" placeholder="مثال: طريق المطار، طرابلس" required>
+
+        <label for="details">تفاصيل إضافية</label>
+        <textarea id="details" maxlength="500" placeholder="اكتب ما شاهدته، دون نشر بيانات شخصية"></textarea>
+
+        <button class="primary" type="submit">حفظ البلاغ على هذا الجهاز</button>
+      </form>
+      <p class="muted">لا تكتب أسماء أشخاص أو أرقام هواتف أو معلومات خاصة.</p>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <h2>📋 البلاغات المحفوظة</h2>
+      <p class="muted">هذه قائمة البلاغات المحلية وليست مصدرًا رسميًا لحالة الطرق.</p>
+      <div id="reports" class="reports"></div>
+      <button class="secondary danger" id="clear">مسح كل البلاغات المحلية</button>
+    </section>
+  </div>
+</main>
+
+<footer>
+  LIBYA ROAD PULSE · نموذج أولي تجريبي · لا توجد حاليًا قاعدة بيانات مشتركة
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const storageKey = "libyaRoadPulseReportsV1";
+  let selectedPoint = null;
+  let marker = null;
+  let map = null;
+
+  function readReports() {
+    try {
+      const data = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      return Array.isArray(data) ? data : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveReports(data) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(data));
+      return true;
+    } catch (_) {
+      alert("تعذّر الحفظ على هذا الجهاز. تحقق من إعدادات المتصفح ومساحة التخزين.");
+      return false;
+    }
+  }
+
+  function setPoint(lat, lng) {
+    selectedPoint = { lat, lng };
+    $("coordinates").textContent =
+      "الموقع المحدد: " + lat.toFixed(5) + ", " + lng.toFixed(5);
+
+    if (map) {
+      if (marker) marker.setLatLng([lat, lng]);
+      else marker = L.marker([lat, lng]).addTo(map);
+    }
+  }
+
+  function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, c => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;",
+      '"':"&quot;", "'":"&#39;"
+    })[c]);
+  }
+
+  function render() {
+    const reports = readReports();
+    $("total").textContent = reports.length;
+    $("closures").textContent = reports.filter(r => r.type === "إغلاق").length;
+    $("hazards").textContent =
+      reports.filter(r => r.type === "خطر" || r.type === "مياه").length;
+
+    const container = $("reports");
+    container.replaceChildren();
+
+    if (!reports.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "لا توجد بلاغات محفوظة. يمكنك إضافة أول بلاغ تجريبي.";
+      container.appendChild(empty);
+      return;
+    }
+
+    reports.slice().reverse().forEach(r => {
+      const article = document.createElement("article");
+      article.className = "report";
+      const time = new Date(r.createdAt);
+      const dateText = Number.isNaN(time.getTime()) ? "" : time.toLocaleString("ar-LY");
+      const pointText = r.lat == null ? "لم يُحدَّد موقع على الخريطة" :
+        "الإحداثيات: " + Number(r.lat).toFixed(5) + ", " + Number(r.lng).toFixed(5);
+
+      article.innerHTML =
+        '<span class="tag">بلاغ محلي · غير مؤكد رسميًا</span>' +
+        '<strong>' + escapeHTML(r.type) + '</strong>' +
+        '<p><b>المنطقة:</b> ' + escapeHTML(r.area) + '</p>' +
+        '<p>' + escapeHTML(r.details || "لا توجد تفاصيل إضافية") + '</p>' +
+        '<p class="muted">' + escapeHTML(pointText) + '</p>' +
+        '<p class="muted">' + escapeHTML(dateText) + '</p>';
+
+      container.appendChild(article);
+    });
+  }
+
+  $("reportForm").addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    const area = $("area").value.trim();
+    if (!area) {
+      alert("اكتب اسم الشارع أو المنطقة أولًا.");
+      return;
+    }
+
+    const reports = readReports();
+    reports.push({
+      id: Date.now(),
+      type: $("type").value,
+      area: area,
+      details: $("details").value.trim(),
+      lat: selectedPoint ? selectedPoint.lat : null,
+      lng: selectedPoint ? selectedPoint.lng : null,
+      createdAt: new Date().toISOString()
+    });
+
+    if (saveReports(reports)) {
+      $("reportForm").reset();
+      render();
+      alert("تم حفظ البلاغ على هذا الجهاز فقط.");
+    }
+  });
+
+  $("clear").addEventListener("click", function () {
+    if (confirm("هل تريد مسح جميع البلاغات المحفوظة على هذا الجهاز؟")) {
+      if (saveReports([])) render();
+    }
+  });
+
+  $("tripoli").addEventListener("click", function () {
+    if (map) map.setView([32.8872, 13.1913], 12);
+  });
+
+  $("locate").addEventListener("click", function () {
+    if (!navigator.geolocation) {
+      alert("تحديد الموقع غير مدعوم في هذا المتصفح.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setPoint(lat, lng);
+        if (map) map.setView([lat, lng], 15);
+      },
+      () => alert("تعذّر تحديد الموقع. تأكد من السماح للمتصفح باستخدام الموقع.")
+    );
+  });
+
+  if (window.L) {
+    map = L.map("map").setView([32.8872, 13.1913], 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    map.on("click", event => setPoint(event.latlng.lat, event.latlng.lng));
+  } else {
+    $("map").textContent = "تعذّر تحميل الخريطة. تحقق من اتصال الإنترنت.";
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
